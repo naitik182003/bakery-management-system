@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bakery Management System</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f8f4e8;
+            color: #5d4037;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #8d6e63;
+            text-align: center;
+            border-bottom: 2px solid #efebe9;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #6d4c41;
+        }
+        .products {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .product-card {
+            border: 1px solid #efebe9;
+            border-radius: 5px;
+            padding: 15px;
+            background-color: #fff8e1;
+            text-align: center;
+        }
+        .product-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .product-price {
+            color: #6d4c41;
+        }
+        .product-stock {
+            font-size: 0.9em;
+            color: #8d6e63;
+        }
+        .order-form {
+            background-color: #efebe9;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        select, input, button {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d7ccc8;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #8d6e63;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #6d4c41;
+        }
+        .order-status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #fbf3e0;
+        }
+        .orders-list {
+            margin-top: 30px;
+        }
+        .order-item {
+            padding: 15px;
+            border: 1px solid #efebe9;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            background-color: #fff8e1;
+        }
+        .order-id {
+            font-size: 0.8em;
+            color: #8d6e63;
+        }
+        .status-pending {
+            color: #f57c00;
+        }
+        .status-processing {
+            color: #1976d2;
+        }
+        .status-completed {
+            color: #388e3c;
+        }
+        .refresh-btn {
+            background-color: #a1887f;
+            margin-bottom: 15px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #8d6e63;
+        }
+        .error-message {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bakery Management System</h1>
+        
+        <h2>Available Products</h2>
+        <div class="products" id="products">
+            <!-- Products will be loaded here -->
+            <div class="product-card">Loading products...</div>
+        </div>
+        
+        <h2>Place an Order</h2>
+        <div class="order-form">
+            <form id="orderForm">
+                <div class="form-group">
+                    <label for="productId">Select Product:</label>
+                    <select id="productId" required>
+                        <option value="">-- Select a product --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="quantity">Quantity:</label>
+                    <input type="number" id="quantity" min="1" value="1" required>
+                </div>
+                <button type="submit">Place Order</button>
+            </form>
+            <div class="order-status" id="orderStatus" style="display: none;"></div>
+        </div>
+        
+        <h2>Your Orders</h2>
+        <button class="refresh-btn" id="refreshOrders">Refresh Orders</button>
+        <div class="orders-list" id="ordersList">
+            <!-- No orders placed yet message -->
+            <p>No orders placed yet.</p>
+        </div>
+    </div>
+
+    <script>
+        // Store orders in local storage
+        let myOrders = JSON.parse(localStorage.getItem('bakeryOrders')) || [];
+        
+        // Load products when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadProducts();
+            updateOrdersList();
+        });
+        
+        // API base URL - change this if your backend is at a different location
+        const API_BASE_URL = 'http://localhost:8000';
+        
+        // Load products from the API
+        function loadProducts() {
+            fetch(`${API_BASE_URL}/products`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(products => {
+                    console.log("Products loaded:", products);
+                    const productsContainer = document.getElementById('products');
+                    productsContainer.innerHTML = '';
+                    
+                    if (products.length === 0) {
+                        productsContainer.innerHTML = '<p>No products available.</p>';
+                        return;
+                    }
+                    
+                    // Clear existing select options except the first one
+                    const selectEl = document.getElementById('productId');
+                    selectEl.innerHTML = '<option value="">-- Select a product --</option>';
+                    
+                    products.forEach(product => {
+                        const productCard = document.createElement('div');
+                        productCard.className = 'product-card';
+                        
+                        productCard.innerHTML = `
+                            <div class="product-name">${product.name}</div>
+                            <div class="product-price">₹${product.price}</div>
+                            <div class="product-stock">In stock: ${product.stock}</div>
+                        `;
+                        
+                        productsContainer.appendChild(productCard);
+                        
+                        // Also update the select dropdown
+                        const option = document.createElement('option');
+                        option.value = product.id;
+                        option.textContent = `${product.name} - ₹${product.price}`;
+                        selectEl.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading products:', error);
+                    document.getElementById('products').innerHTML = `
+                        <div class="error-message" style="grid-column: 1/-1;">
+                            Error loading products: ${error.message}. Please ensure the backend server is running.
+                        </div>
+                    `;
+                });
+        }
+        
+        // Handle order form submission
+        document.getElementById('orderForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            const productId = parseInt(document.getElementById('productId').value);
+            const quantity = parseInt(document.getElementById('quantity').value);
+            
+            // Validate inputs
+            if (isNaN(productId) || isNaN(quantity) || quantity < 1) {
+                showOrderStatus('Please select a product and enter a valid quantity.', 'error');
+                return;
+            }
+            
+            // Disable submit button during API call
+            const submitButton = this.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.textContent = 'Placing Order...';
+            
+            // Place order via API
+            fetch(`${API_BASE_URL}/order`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    product_id: productId,
+                    quantity: quantity
+                })
+            })
+            .then(response => {
+                submitButton.disabled = false;
+                submitButton.textContent = 'Place Order';
+                
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.detail || 'Failed to place order');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Show success message
+                showOrderStatus(`Order placed successfully! Order ID: ${data.order_id}`, 'success');
+                
+                // Add to local orders
+                const productName = document.getElementById('productId').options[
+                    document.getElementById('productId').selectedIndex
+                ].text;
+                
+                const newOrder = {
+                    id: data.order_id,
+                    product: productName,
+                    quantity: quantity,
+                    status: data.status,
+                    timestamp: new Date().toISOString()
+                };
+                
+                myOrders.push(newOrder);
+                localStorage.setItem('bakeryOrders', JSON.stringify(myOrders));
+                
+                // Reset form
+                document.getElementById('orderForm').reset();
+                
+                // Update orders list
+                updateOrdersList();
+                
+                // Refresh product list to show updated stock
+                loadProducts();
+                
+                // Start polling for status updates
+                pollOrderStatus(data.order_id);
+            })
+            .catch(error => {
+                submitButton.disabled = false;
+                submitButton.textContent = 'Place Order';
+                showOrderStatus('Error: ' + error.message, 'error');
+            });
+        });
+        
+        // Show order status message
+        function showOrderStatus(message, type) {
+            const orderStatus = document.getElementById('orderStatus');
+            orderStatus.textContent = message;
+            orderStatus.style.display = 'block';
+            
+            // Set color based on type
+            if (type === 'error') {
+                orderStatus.style.backgroundColor = '#ffebee';
+                orderStatus.style.color = '#c62828';
+            } else {
+                orderStatus.style.backgroundColor = '#e8f5e9';
+                orderStatus.style.color = '#2e7d32';
+            }
+            
+            // Auto hide after 5 seconds
+            setTimeout(() => {
+                orderStatus.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Update the orders list display
+        function updateOrdersList() {
+            const ordersList = document.getElementById('ordersList');
+            
+            if (myOrders.length === 0) {
+                ordersList.innerHTML = '<p>No orders placed yet.</p>';
+                return;
+            }
+            
+            ordersList.innerHTML = '';
+            
+            // Sort orders by timestamp, newest first
+            myOrders.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            
+            myOrders.forEach(order => {
+                const orderItem = document.createElement('div');
+                orderItem.className = 'order-item';
+                
+                let statusClass = '';
+                if (order.status === 'pending') statusClass = 'status-pending';
+                if (order.status === 'processing') statusClass = 'status-processing';
+                if (order.status === 'completed') statusClass = 'status-completed';
+                
+                orderItem.innerHTML = `
+                    <div class="order-id">Order ID: ${order.id}</div>
+                    <div>${order.product} x ${order.quantity}</div>
+                    <div class="${statusClass}">Status: ${order.status}</div>
+                    <div>${new Date(order.timestamp).toLocaleString()}</div>
+                    <button class="cancel-btn" data-id="${order.id}" 
+                        ${order.status === 'completed' ? 'disabled style="opacity: 0.5;"' : ''}>
+                        ${order.status === 'completed' ? 'Completed' : 'Cancel Order'}
+                    </button>
+                `;
+                
+                ordersList.appendChild(orderItem);
+            });
+            
+            // Add event listeners to cancel buttons
+            document.querySelectorAll('.cancel-btn').forEach(btn => {
+                if (btn.textContent.trim() !== 'Completed') {
+                    btn.addEventListener('click', function() {
+                        cancelOrder(this.getAttribute('data-id'));
+                    });
+                }
+            });
+        }
+        
+        // Cancel an order
+        function cancelOrder(orderId) {
+            if (!confirm('Are you sure you want to cancel this order?')) {
+                return;
+            }
+            
+            fetch(`${API_BASE_URL}/order/${orderId}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.detail || 'Failed to cancel order');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Remove from local storage
+                myOrders = myOrders.filter(order => order.id !== orderId);
+                localStorage.setItem('bakeryOrders', JSON.stringify(myOrders));
+                
+                // Show success message
+                showOrderStatus(`Order canceled successfully!`, 'success');
+                
+                // Update orders list
+                updateOrdersList();
+                
+                // Refresh product list to show updated stock
+                loadProducts();
+            })
+            .catch(error => {
+                showOrderStatus('Error: ' + error.message, 'error');
+            });
+        }
+        
+        // Poll for order status updates
+        function pollOrderStatus(orderId) {
+            const interval = setInterval(() => {
+                fetch(`${API_BASE_URL}/order/${orderId}`)
+                    .then(response => {
+                        if (!response.ok) {
+                            clearInterval(interval);
+                            throw new Error('Order not found');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // Find and update order in local storage
+                        const orderIndex = myOrders.findIndex(order => order.id === orderId);
+                        if (orderIndex >= 0) {
+                            myOrders[orderIndex].status = data.status;
+                            localStorage.setItem('bakeryOrders', JSON.stringify(myOrders));
+                            updateOrdersList();
+                            
+                            // Stop polling if order is completed
+                            if (data.status === 'completed' || data.status === 'canceled') {
+                                clearInterval(interval);
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error polling order status:', error);
+                    });
+            }, 5000); // Poll every 5 seconds
+            
+            // Stop polling after 5 minutes regardless of status
+            setTimeout(() => {
+                clearInterval(interval);
+            }, 5 * 60 * 1000);
+        }
+        
+        // Refresh orders button
+        document.getElementById('refreshOrders').addEventListener('click', function() {
+            // Get all order IDs from local storage
+            const orderIds = myOrders.map(order => order.id);
+            
+            // If no orders, do nothing
+            if (orderIds.length === 0) return;
+            
+            // Show loading state
+            this.disabled = true;
+            this.textContent = 'Refreshing...';
+            
+            // Update all orders
+            Promise.all(
+                orderIds.map(id => 
+                    fetch(`${API_BASE_URL}/order/${id}`)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`Order ${id} not found`);
+                            }
+                            return response.json();
+                        })
+                        .catch(error => {
+                            console.error(error);
+                            return { id: id, status: 'unknown' };
+                        })
+                )
+            ).then(results => {
+                // Update local storage with latest statuses
+                results.forEach(result => {
+                    const orderIndex = myOrders.findIndex(order => order.id === result.id);
+                    if (orderIndex >= 0 && result.status !== 'unknown') {
+                        myOrders[orderIndex].status = result.status;
+                    }
+                });
+                
+                localStorage.setItem('bakeryOrders', JSON.stringify(myOrders));
+                updateOrdersList();
+                
+                // Reset button state
+                this.disabled = false;
+                this.textContent = 'Refresh Orders';
+            });
+        });
+    </script>
+</body>
+</html>
